@@ -1,0 +1,109 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# =============================================
+# Node.js / Frontend
+# =============================================
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+.next/
+/out/
+
+# production
+/build
+dist/
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# vercel
+.vercel
+
+# =============================================
+# Python / Backend
+# =============================================
+
+# byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# distribution / packaging
+*.egg-info/
+*.egg
+build/
+dist/
+
+# SQLite databases (may contain PII / password hashes)
+*.db
+*.sqlite3
+
+# =============================================
+# Environment / Secrets (CRITICAL)
+# =============================================
+# Block ALL .env variants EXCEPT .env.example
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Explicitly allow .env.example files (safe placeholders only)
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# =============================================
+# IDE / Editor
+# =============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# =============================================
+# Project-specific
+# =============================================
+
+# nested scratch apps
+resturant-app/
+
