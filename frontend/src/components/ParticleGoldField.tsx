@@ -1,11 +1,22 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
+
+interface Particle {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  duration: number;
+  delay: number;
+}
 
 export default function ParticleGoldField({ count = 20 }: { count?: number }) {
-  const particles = useMemo(() => {
-    return Array.from({ length: count }).map((_, i) => ({
+  const [particles, setParticles] = useState<Particle[]>([]);
+
+  useEffect(() => {
+    const generated = Array.from({ length: count }).map((_, i) => ({
       id: i,
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -13,7 +24,12 @@ export default function ParticleGoldField({ count = 20 }: { count?: number }) {
       duration: Math.random() * 8 + 6,
       delay: Math.random() * 5,
     }));
+    setParticles(generated);
   }, [count]);
+
+  if (particles.length === 0) {
+    return <div className="absolute inset-0 overflow-hidden pointer-events-none z-0" />;
+  }
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">

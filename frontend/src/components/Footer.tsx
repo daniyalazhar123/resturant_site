@@ -82,8 +82,8 @@ export default function Footer() {
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-500 gap-4">
           <p>© 2026 L'Étoile Dorée & Royal Pavilion. All rights reserved.</p>
           <div className="flex gap-6">
-            <span>Privacy Policy</span>
-            <span>Terms of Haute Dining</span>
+            <Link href="/privacy" className="hover:text-amber-400">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-amber-400">Terms of Haute Dining</Link>
             <span>Accessibility</span>
           </div>
         </div>

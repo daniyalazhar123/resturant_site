@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { z } from "zod";
 
 export interface CartItem {
   id: string;
@@ -12,13 +13,33 @@ export interface CartItem {
   quantity: number;
 }
 
+const CartItemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  price: z.string(),
+  priceNumber: z.number().nonnegative(),
+  image: z.string(),
+  category: z.string(),
+  quantity: z.number().int().positive(),
+});
+
 const CART_KEY = "etoile_cart_items";
 
 export function getCartFromStorage(): CartItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const item = localStorage.getItem(CART_KEY);
-    return item ? JSON.parse(item) : [];
+    const raw = localStorage.getItem(CART_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const validated: CartItem[] = [];
+    for (const item of parsed) {
+      const res = CartItemSchema.safeParse(item);
+      if (res.success) {
+        validated.push(res.data);
+      }
+    }
+    return validated;
   } catch {
     return [];
   }

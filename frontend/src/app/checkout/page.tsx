@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartState } from "@/lib/cartStore";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function CheckoutPage() {
-  const { cart, removeFromCart, updateQuantity, totalPrice, clearCart } = useCartState();
+  const { cart, totalPrice, clearCart } = useCartState();
   const [orderType, setOrderType] = useState<"takeout" | "delivery">("takeout");
   const [formData, setFormData] = useState({
     name: "",
@@ -16,52 +16,82 @@ export default function CheckoutPage() {
     address: "",
     time: "19:00",
     notes: "",
-    cardNumber: "",
-    cardExp: "",
-    cardCvc: "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const successParam = params.get("success");
+    const canceledParam = params.get("canceled");
+    const returnedOrderCode = params.get("order_code");
+
+    if (successParam === "true" && returnedOrderCode) {
+      setOrderId(returnedOrderCode);
+      setIsSuccess(true);
+      clearCart();
+    } else if (canceledParam === "true") {
+      setErrorMessage(
+        "Stripe payment was canceled. You can review your order below and try again whenever you are ready."
+      );
+    }
+  }, [clearCart]);
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleCheckout = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (cart.length === 0) return;
+    e.preventDefault();
+    if (cart.length === 0) return;
 
-  setIsSubmitting(true);
-  try {
-    const itemsSummary = cart.map((i) => `${i.quantity}× ${i.name}`).join(", ");
-    const payload = {
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      order_type: orderType,
-      items_summary: itemsSummary,
-      total_amount: totalPrice,
-    };
-    const res = await fetch("/api/v1/orders/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Failed to create order");
-    setOrderId(data.order_code);
-    setIsSuccess(true);
-    clearCart();
-  } catch (err) {
-    console.error(err);
-    // You could set an error state to show UI feedback
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        order_type: orderType === "takeout" ? "Takeout" : "Delivery",
+        items: cart.map((item) => ({
+          item_id: item.id,
+          quantity: item.quantity,
+        })),
+      };
+      const res = await fetch("/api/v1/orders/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || "Failed to initialize checkout");
+      }
+
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+
+      setOrderId(data.order_code);
+      setIsSuccess(true);
+      clearCart();
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "An unexpected error occurred during checkout."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-10 pb-24">
@@ -196,63 +226,33 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  {/* Payment Details Simulator */}
-                  <div className="space-y-4 p-6 rounded-xl bg-zinc-900/40 border border-zinc-800">
-                    <h3 className="text-base font-serif font-bold text-amber-400">
-                      2. Payment Method
-                    </h3>
-                    <div>
-                      <label className="block text-[10px] uppercase font-semibold text-zinc-400 mb-1">
-                        Card Number
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        name="cardNumber"
-                        value={formData.cardNumber}
-                        onChange={handleInputChange}
-                        placeholder="4532 •••• •••• 8892"
-                        className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded text-xs focus:border-amber-400 focus:outline-none font-mono"
-                      />
+                  {/* PCI-DSS SAQ-A Hosted Stripe Checkout Notice */}
+                  <div className="space-y-3 p-6 rounded-xl bg-zinc-900/40 border border-amber-500/30">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-serif font-bold text-amber-400">
+                        2. Secure Stripe Hosted Payment (PCI-DSS SAQ-A)
+                      </h3>
+                      <span className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold">
+                        256-Bit TLS Encrypted
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] uppercase font-semibold text-zinc-400 mb-1">
-                          Expiry (MM/YY)
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          name="cardExp"
-                          value={formData.cardExp}
-                          onChange={handleInputChange}
-                          placeholder="12/28"
-                          className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded text-xs focus:border-amber-400 focus:outline-none font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] uppercase font-semibold text-zinc-400 mb-1">
-                          CVC
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          name="cardCvc"
-                          value={formData.cardCvc}
-                          onChange={handleInputChange}
-                          placeholder="882"
-                          className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded text-xs focus:border-amber-400 focus:outline-none font-mono"
-                        />
-                      </div>
-                    </div>
+                    <p className="text-xs text-zinc-300 font-light leading-relaxed">
+                      For your security and strict PCI-DSS compliance, L&apos;Étoile Dorée never collects or stores raw credit card numbers on our servers. Clicking the button below will redirect you to our official <strong>Stripe Hosted Checkout</strong> page to complete your payment securely.
+                    </p>
                   </div>
+
+                  {errorMessage && (
+                    <div className="p-4 rounded-lg bg-red-950/50 border border-red-500/40 text-xs text-red-200">
+                      {errorMessage}
+                    </div>
+                  )}
 
                   <button
                     type="submit"
                     disabled={isSubmitting || cart.length === 0}
                     className="w-full py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-zinc-950 font-bold uppercase tracking-wider text-xs rounded hover:brightness-110 transition-all shadow-xl shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
                   >
-                    {isSubmitting ? "Processing Payment..." : `Pay & Confirm (€${totalPrice.toFixed(2)})`}
+                    {isSubmitting ? "Redirecting to Stripe Checkout..." : `Proceed to Secure Stripe Checkout (€${totalPrice.toFixed(2)})`}
                   </button>
                 </form>
               </div>

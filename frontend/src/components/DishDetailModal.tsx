@@ -86,6 +86,37 @@ export default function DishDetailModal({
                 {dish.description}
               </p>
 
+              {/* Ingredients & Dietary Disclosures */}
+              {dish.ingredients && dish.ingredients.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider block">
+                    Curated Ingredients
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {dish.ingredients.map((ing, i) => (
+                      <span key={i} className="text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded">
+                        {ing}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {dish.dietary && dish.dietary.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[9px] uppercase font-semibold text-amber-500/90 tracking-wider block">
+                    Allergen &amp; Dietary Guidance (EU 1169/2011)
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {dish.dietary.map((d, i) => (
+                      <span key={i} className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Pairing Note */}
               {dish.pairing && (
                 <div className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800 space-y-1">

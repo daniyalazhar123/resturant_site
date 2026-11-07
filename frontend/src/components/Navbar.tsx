@@ -68,6 +68,14 @@ export default function Navbar() {
                 )}
               </button>
 
+              {/* Sign In Link */}
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center px-4 py-2.5 border border-amber-500/40 text-amber-400 text-xs font-semibold tracking-wider uppercase rounded hover:bg-amber-500/10 transition-all duration-300"
+              >
+                Sign In
+              </Link>
+
               {/* Table Booking CTA */}
               <Link
                 href="/reservation"
@@ -123,7 +131,14 @@ export default function Navbar() {
                 {link.name}
               </Link>
             ))}
-            <div className="pt-3">
+            <div className="pt-3 flex flex-col gap-2">
+              <Link
+                href="/login"
+                onClick={() => setIsOpen(false)}
+                className="block w-full text-center py-2.5 border border-amber-500/40 text-amber-400 text-xs font-semibold uppercase tracking-wider rounded"
+              >
+                Sign In / VIP Access
+              </Link>
               <Link
                 href="/reservation"
                 onClick={() => setIsOpen(false)}

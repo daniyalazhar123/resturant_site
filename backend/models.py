@@ -68,3 +68,11 @@ class Order(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     user = relationship("User", back_populates="orders")
+
+class RagDocument(Base):
+    __tablename__ = "rag_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+    metadata_json = Column("metadata", Text, nullable=True) # JSON string or metadata dictionary
+    embedding = Column(Text, nullable=True) # Vector or serialized float array

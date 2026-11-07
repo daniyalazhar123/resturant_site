@@ -36,11 +36,11 @@ export default function AIChatbotWidget() {
     setIsLoading(true);
 
     try {
-      // Call FastAPI RAG Chatbot Backend
-      const res = await fetch("http://localhost:8000/api/v1/chatbot/query", {
+      // Call FastAPI RAG Chatbot Backend (proxied via Next.js rewrites)
+      const res = await fetch("/api/v1/chatbot/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: userMsg.text }),
+        body: JSON.stringify({ query: userMsg.text.slice(0, 500) }),
       });
 
       if (res.ok) {
@@ -54,12 +54,14 @@ export default function AIChatbotWidget() {
           },
         ]);
       } else {
-        // Fallback RAG response simulator
         setMessages((prev) => [
           ...prev,
           {
             sender: "ai",
-            text: getFallbackRAGAnswer(userMsg.text),
+            text:
+              res.status === 429
+                ? "You're sending messages too quickly. Please wait a moment and try again."
+                : "Our concierge is temporarily unavailable. Please try again shortly.",
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           },
         ]);
@@ -69,30 +71,13 @@ export default function AIChatbotWidget() {
         ...prev,
         {
           sender: "ai",
-          text: getFallbackRAGAnswer(userMsg.text),
+          text: "Unable to reach our concierge right now. Please check your connection and try again.",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const getFallbackRAGAnswer = (q: string): string => {
-    const lower = q.toLowerCase();
-    if (lower.includes("pakistani") || lower.includes("karahi") || lower.includes("biryani")) {
-      return "For royal Pakistani cuisine, our Executive Chef Mahnoor Khan recommends our Royal Mutton Dum Biryani Azafrán (€36) or Peshawari Lamb Karahi (€42), slow-cooked over live charcoal in clay pots!";
-    }
-    if (lower.includes("seafood") || lower.includes("lobster") || lower.includes("seabass")) {
-      return "Our signature ocean delicacy is the Maine Lobster Thermidor (€68), flambéed with Cognac & Gruyère, paired with Dom Pérignon Brut!";
-    }
-    if (lower.includes("book") || lower.includes("reserve") || lower.includes("table")) {
-      return "You can reserve a table in our Main Hall or private VIP Suites directly via our Reservation page. Online bookings receive complimentary valet parking!";
-    }
-    if (lower.includes("hour") || lower.includes("time") || lower.includes("open")) {
-      return "L'Étoile Dorée is open 7 days a week: Lunch from 12:00 to 15:30, and Dinner from 18:00 to 23:30 at Place Vendôme, Paris.";
-    }
-    return "L'Étoile Dorée & Royal Pavilion offers an extraordinary haute gastronomy journey fusing French fine dining with royal Eastern traditions. How else may I guide your order?";
   };
 
   return (

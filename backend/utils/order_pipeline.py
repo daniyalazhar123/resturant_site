@@ -1,7 +1,12 @@
 import os
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Dict, Any
+
+logger = logging.getLogger("order_pipeline")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 try:
     from kafka import KafkaProducer
@@ -32,15 +37,17 @@ class OrderEventProducer:
                     value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                     key_serializer=lambda k: k.encode('utf-8') if k else None,
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Kafka unavailable, falling back to structured logging: {e}")
                 self.producer = None
     
     def publish_order_event(self, order_id: str, status: str, metadata: Dict[str, Any] = None):
+        now = datetime.now(timezone.utc)
         event = {
-            "event_id": f"evt_{order_id}_{datetime.utcnow().timestamp()}",
+            "event_id": f"evt_{order_id}_{now.timestamp()}",
             "order_id": order_id,
             "status": status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": now.isoformat(),
             "metadata": metadata or {}
         }
         if self.producer:
@@ -48,10 +55,10 @@ class OrderEventProducer:
                 self.producer.send(self.topic, key=order_id, value=event)
                 self.producer.flush(timeout=5)
                 return True
-            except Exception:
-                pass
-        # Fallback: log if Kafka unavailable
-        print(f"[ORDER_EVENT] {json.dumps(event)}")
+            except Exception as e:
+                logger.error(f"Kafka send error: {e}")
+        # Structured log fallback with audit metadata
+        logger.info(f"Order state transition: code={order_id} status={status}")
         return True
 
 producer = OrderEventProducer()

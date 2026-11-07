@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCartState } from "@/lib/cartStore";
@@ -9,8 +9,10 @@ interface DishItem {
   id: string;
   name: string;
   nativeName?: string;
+  category?: string;
   description: string;
   price: string;
+  priceNumber?: number;
   image: string;
   tag: string;
 }
@@ -22,11 +24,44 @@ interface CuisinePage {
   dishes: DishItem[];
 }
 
+const CUISINE_METADATA: { cuisine: string; subtitle: string; flagEmoji: string }[] = [
+  {
+    cuisine: "Pakistani Royal Cuisine",
+    subtitle: "Traditional Clay Pot & Live Charcoal Delicacies",
+    flagEmoji: "🇵🇰",
+  },
+  {
+    cuisine: "Indian Imperial Feasts",
+    subtitle: "Rich Mughlai & Azafrán Spiced Curries",
+    flagEmoji: "🇮🇳",
+  },
+  {
+    cuisine: "Chinese & Asian Mastery",
+    subtitle: "Imperial Peking Duck & Crystal Dim Sum",
+    flagEmoji: "🇨🇳",
+  },
+  {
+    cuisine: "Thai Exotic Delights",
+    subtitle: "Aromatic Herbs, Lemongrass & Coconut Infusions",
+    flagEmoji: "🇹🇭",
+  },
+  {
+    cuisine: "Ocean & Seafood Treasures",
+    subtitle: "Wild-Caught Catch Poached & Grilled to Perfection",
+    flagEmoji: "🦞",
+  },
+  {
+    cuisine: "Grand Desserts & Elixirs",
+    subtitle: "Royal Sweet Delights & Saffron Teas",
+    flagEmoji: "🍨",
+  },
+];
+
 export default function MenuBook() {
   const [activePageIndex, setActivePageIndex] = useState<number>(0);
-const { addToCart } = useCartState();
+  const { addToCart } = useCartState();
 
-  const bookPages: CuisinePage[] = [
+  const [bookPages, setBookPages] = useState<CuisinePage[]>([
     {
       cuisine: "Pakistani Royal Cuisine",
       subtitle: "Traditional Clay Pot & Live Charcoal Delicacies",
@@ -213,9 +248,31 @@ const { addToCart } = useCartState();
         },
       ],
     },
-  ];
+  ]);
 
-  const currentPage = bookPages[activePageIndex];
+  useEffect(() => {
+    let active = true;
+    fetch("/api/v1/menu/")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data?.menu || !Array.isArray(data.menu)) return;
+        const grouped: CuisinePage[] = CUISINE_METADATA.map((meta) => ({
+          ...meta,
+          dishes: data.menu.filter((item: DishItem) => item.category === meta.cuisine),
+        })).filter((page) => page.dishes.length > 0);
+        if (grouped.length > 0) {
+          setBookPages(grouped);
+        }
+      })
+      .catch(() => {
+        // Fallback to initial seeded state if backend is offline
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const currentPage = bookPages[activePageIndex] || bookPages[0];
 
   const nextPage = () => {
     setActivePageIndex((prev) => (prev + 1) % bookPages.length);
@@ -324,30 +381,28 @@ const { addToCart } = useCartState();
                                 </span>
                               )}
                             </div>
-                            <span className="text-amber-400 font-bold text-base font-serif">
-                              {dish.price}
-                            </span>
-<button
-  onClick={() =>
-    addToCart({
-      id: dish.id,
-      name: dish.name,
-      price: dish.price,
-      priceNumber: parseFloat(dish.price.replace(/[^0-9.]/g, "")),
-      image: dish.image,
-      category: currentPage.cuisine,
-      quantity: 1,
-    })
-  }
-  className="ml-2 px-2 py-1 bg-amber-500 text-zinc-950 text-xs font-semibold rounded hover:bg-amber-400 transition"
->
-  Add to Cart
-</button>
-  }
-  className="ml-2 px-2 py-1 bg-amber-500 text-zinc-950 text-xs font-semibold rounded hover:bg-amber-400 transition"
->
-  Add to Cart
-</button>
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-400 font-bold text-base font-serif">
+                                {dish.price}
+                              </span>
+                              <button
+                                onClick={() =>
+                                  addToCart({
+                                    id: dish.id,
+                                    name: dish.name,
+                                    price: dish.price,
+                                    priceNumber:
+                                      dish.priceNumber ??
+                                      parseFloat(dish.price.replace(/[^0-9.]/g, "")),
+                                    image: dish.image,
+                                    category: currentPage.cuisine,
+                                  })
+                                }
+                                className="ml-2 px-2 py-1 bg-amber-500 text-zinc-950 text-xs font-semibold rounded hover:bg-amber-400 transition cursor-pointer"
+                              >
+                                Add to Cart
+                              </button>
+                            </div>
                           </div>
                           <p className="text-zinc-400 text-xs font-light leading-relaxed mt-1 line-clamp-2">
                             {dish.description}

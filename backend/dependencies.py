@@ -55,7 +55,15 @@ async def require_auth(
             detail="Could not validate credentials",
         )
     
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+        )
+
+    user = db.query(User).filter(User.id == user_id_int).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -85,7 +93,12 @@ async def get_current_user_optional(
         token_type: str = payload.get("type")
         if user_id is None or token_type != "access":
             return None
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        try:
+            user_id_int = int(user_id)
+        except (ValueError, TypeError):
+            return None
+
+        user = db.query(User).filter(User.id == user_id_int).first()
         return user
     except Exception:
         return None

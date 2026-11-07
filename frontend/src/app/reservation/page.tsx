@@ -27,6 +27,8 @@ export default function Reservation() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errors, setErrors] = useState<Partial<FormData>>({});
+  const [referenceCode, setReferenceCode] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const timeSlots = [
     "18:00",
@@ -70,17 +72,20 @@ export default function Reservation() {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       const res = await fetch("/api/reservation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(formData),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
+        setReferenceCode(data.reference_code || "");
         setIsSuccess(true);
         setFormData({
           name: "",
@@ -97,9 +102,11 @@ export default function Reservation() {
           serverErrors[err.field as keyof FormData] = err.message;
         });
         setErrors(serverErrors);
+      } else {
+        setSubmitError(data.message || "Reservation could not be completed. Please try again.");
       }
     } catch {
-      setErrors({ name: "Network error occurred. Please try again." });
+      setSubmitError("Network error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -171,8 +178,13 @@ export default function Reservation() {
                   Booking Request Received
                 </h2>
                 <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-md mx-auto">
-                  Thank you for your reservation. A confirmation email has been sent. We look forward to hosting you at L'Étoile Dorée.
+                  Thank you for your reservation. We look forward to hosting you at L&apos;Étoile Dorée.
                 </p>
+                {referenceCode && (
+                  <div className="inline-block px-4 py-2 rounded bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-300">
+                    Reference: <span className="text-amber-400 font-bold">{referenceCode}</span>
+                  </div>
+                )}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -332,6 +344,10 @@ export default function Reservation() {
                     placeholder="e.g. Vegetarian diet, wheelchair accessibility, celebrating an anniversary..."
                   ></textarea>
                 </div>
+
+                {submitError && (
+                  <p className="text-xs text-red-500 font-light">{submitError}</p>
+                )}
 
                 {/* Submit Button with Framer scale effects */}
                 <div className="pt-2">

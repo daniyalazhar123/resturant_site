@@ -38,7 +38,7 @@ export function SparklesCore({
   }
 
   const particlesRef = useRef<Particle[]>([]);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
 
   const initParticles = useCallback(
     (width: number, height: number) => {

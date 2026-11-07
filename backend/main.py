@@ -1,18 +1,37 @@
 import os
+from pathlib import Path
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).resolve().parent / ".env"
+    load_dotenv(dotenv_path=env_path)
+except ImportError:
+    pass
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from rate_limit import limiter
+from database import engine, Base, SessionLocal
 from routers import reservations, chatbot, menu, orders, auth, webhooks
 
-# Auto-create database tables on startup
+# Auto-create database tables on startup and seed authoritative 16-dish menu catalog
 Base.metadata.create_all(bind=engine)
+with SessionLocal() as _startup_db:
+    menu.seed_menu_items(_startup_db)
+    from rag_chatbot import seed_rag_knowledge
+    seed_rag_knowledge(_startup_db)
 
 app = FastAPI(
     title="L'Étoile Dorée & Royal Pavilion API",
     description="Python FastAPI backend powering Michelin-Starred Haute Gastronomie & RAG AI Chatbot",
     version="1.0.0",
 )
+
+# Rate limiting (slowapi) — returns 429 when limits are exceeded
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS Middleware - SECURITY FIX
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")

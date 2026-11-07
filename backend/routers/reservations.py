@@ -1,23 +1,43 @@
-import random
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Reservation, User
 from schemas import ReservationCreateSchema
-from dependencies import require_auth, require_admin
+from dependencies import require_auth, require_admin, get_current_user_optional
+from rate_limit import limiter
 
 router = APIRouter(prefix="/api/v1/reservations", tags=["Reservations"])
 
+
+def _generate_unique_reference_code(db: Session) -> str:
+    """Generate a cryptographically random, unique reservation reference code."""
+    for _ in range(5):
+        candidate = f"RES-{secrets.token_hex(4).upper()}"
+        exists = db.query(Reservation.id).filter(Reservation.reference_code == candidate).first()
+        if not exists:
+            return candidate
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Could not generate unique reservation reference code",
+    )
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
+@limiter.limit("15/minute")
 def create_reservation(
-    payload: ReservationCreateSchema, 
+    request: Request,
+    payload: ReservationCreateSchema,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_auth)
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    ref_code = f"RES-{random.randint(1000, 9999)}"
+    """Guests may book without an account; authenticated users get the booking linked to them."""
+    ref_code = _generate_unique_reference_code(db)
 
     db_res = Reservation(
-        user_id=current_user.id,  # Tie reservation to authenticated user
+        user_id=current_user.id if current_user else None,
         reference_code=ref_code,
         full_name=payload.name,
         email=payload.email,
@@ -27,60 +47,82 @@ def create_reservation(
         guests=payload.guests,
         table_type=payload.table_type or "Main Hall",
         special_requests=payload.requests,
-        status="Confirmed"
+        status="Confirmed",
     )
 
-    db.add(db_res)
-    db.commit()
-    db.refresh(db_res)
+    try:
+        db.add(db_res)
+        db.commit()
+        db.refresh(db_res)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Reservation conflict, please retry",
+        )
 
     return {
         "success": True,
         "message": "VIP Reservation confirmed successfully!",
         "reference_code": ref_code,
-        "reservation_id": db_res.id,
     }
+
 
 @router.get("/")
 def get_user_reservations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_auth)
+    current_user: User = Depends(require_auth),
 ):
     """Get reservations for authenticated user only"""
-    reservations = db.query(Reservation).filter(Reservation.user_id == current_user.id).order_by(Reservation.id.desc()).all()
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.user_id == current_user.id)
+        .order_by(Reservation.id.desc())
+        .all()
+    )
     return {"success": True, "count": len(reservations), "reservations": [
         {
-            "id": r.id,
             "reference_code": r.reference_code,
             "date": r.date,
             "time": r.time,
             "guests": r.guests,
             "table_type": r.table_type,
             "status": r.status,
-            "special_requests": r.special_requests
+            "special_requests": r.special_requests,
         } for r in reservations
     ]}
+
 
 @router.get("/admin/all")
 def list_all_reservations(
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_admin),
 ):
     """Admin only - list all reservations"""
     reservations = db.query(Reservation).order_by(Reservation.id.desc()).all()
     return {"success": True, "count": len(reservations), "reservations": reservations}
 
+
 @router.get("/{ref_code}")
 def get_reservation(
     ref_code: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_auth)
+    current_user: User = Depends(require_auth),
 ):
-    """Get specific reservation - only if it belongs to authenticated user"""
+    """Get specific reservation - uniform 404 prevents reference-code enumeration."""
     res = db.query(Reservation).filter(Reservation.reference_code == ref_code).first()
-    if not res:
+    if not res or (res.user_id != current_user.id and current_user.role != "ADMIN"):
         raise HTTPException(status_code=404, detail="Reservation not found")
-    if res.user_id != current_user.id and current_user.role != "ADMIN":
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    return {"success": True, "reservation": res}
+
+    return {"success": True, "reservation": {
+        "reference_code": res.reference_code,
+        "full_name": res.full_name,
+        "email": res.email,
+        "phone": res.phone,
+        "date": res.date,
+        "time": res.time,
+        "guests": res.guests,
+        "table_type": res.table_type,
+        "status": res.status,
+        "special_requests": res.special_requests,
+    }}

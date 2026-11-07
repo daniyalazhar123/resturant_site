@@ -43,6 +43,23 @@ RESTAURANT_KNOWLEDGE_BASE = [
     }
 ]
 
+def seed_rag_knowledge(db) -> None:
+    """Ensure baseline knowledge documents exist in database table."""
+    try:
+        from models import RagDocument
+        count = db.query(RagDocument).count()
+        if count == 0:
+            for item in RESTAURANT_KNOWLEDGE_BASE:
+                doc = RagDocument(
+                    content=item["content"],
+                    metadata_json=json.dumps(item["metadata"]),
+                    embedding=None
+                )
+                db.add(doc)
+            db.commit()
+    except Exception:
+        db.rollback()
+
 class RAGEngine:
     def __init__(self):
         self.cohere_client = None
