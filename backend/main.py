@@ -33,7 +33,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Configure CORS Middleware - SECURITY FIX
+# Configure CORS Middleware - STRICT SECURITY FIX
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 origins = [frontend_url]
 # Allow additional origins if needed
@@ -46,7 +46,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-Forwarded-For"],
 )
 
 # Include API Routers

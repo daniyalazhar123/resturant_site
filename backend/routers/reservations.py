@@ -1,6 +1,8 @@
+import os
 import secrets
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from database import get_db
@@ -10,6 +12,46 @@ from dependencies import require_auth, require_admin, get_current_user_optional
 from rate_limit import limiter
 
 router = APIRouter(prefix="/api/v1/reservations", tags=["Reservations"])
+
+
+async def send_reservation_email_task(email: str, ref_code: str) -> None:
+    """Send transactional reservation confirmation email via Resend API."""
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    if not api_key:
+        return
+
+    from_email = os.getenv("RESEND_FROM_EMAIL", "L'Étoile Dorée <onboarding@resend.dev>").strip()
+
+    payload = {
+        "from": from_email,
+        "to": [email],
+        "subject": f"Your VIP Dining Reservation at L'Étoile Dorée [{ref_code}]",
+        "html": (
+            "<div style='font-family: serif; color: #18181b; padding: 24px; max-width: 600px; margin: auto;'>"
+            "<h1 style='color: #b45309; letter-spacing: 2px;'>L'Étoile Dorée & Royal Pavilion</h1>"
+            "<p style='font-size: 14px; text-transform: uppercase; color: #71717a;'>12 Place Vendôme, Paris</p>"
+            "<hr style='border: 1px solid #fef3c7;'/>"
+            "<p>Dear Honored Guest,</p>"
+            "<p>We have the honor to confirm your table reservation. Your reservation booking reference is:</p>"
+            f"<div style='background: #18181b; color: #f59e0b; padding: 16px; text-align: center; font-size: 20px; font-weight: bold; border-radius: 8px; font-family: monospace;'>{ref_code}</div>"
+            "<p style='margin-top: 16px;'>Please present this reference upon arrival to our Maître d' for priority escort to your table or private salon.</p>"
+            "<p style='font-size: 12px; color: #a1a1aa;'>Complimentary valet parking is reserved in your honor at Place Vendôme.</p>"
+            "</div>"
+        ),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+    except Exception:
+        pass
 
 
 def _generate_unique_reference_code(db: Session) -> str:
@@ -26,10 +68,12 @@ def _generate_unique_reference_code(db: Session) -> str:
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/reserve", status_code=status.HTTP_201_CREATED)
 @limiter.limit("15/minute")
 def create_reservation(
     request: Request,
     payload: ReservationCreateSchema,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
@@ -61,6 +105,8 @@ def create_reservation(
             detail="Reservation conflict, please retry",
         )
 
+    background_tasks.add_task(send_reservation_email_task, payload.email, ref_code)
+
     return {
         "success": True,
         "message": "VIP Reservation confirmed successfully!",
@@ -80,17 +126,22 @@ def get_user_reservations(
         .order_by(Reservation.id.desc())
         .all()
     )
-    return {"success": True, "count": len(reservations), "reservations": [
-        {
-            "reference_code": r.reference_code,
-            "date": r.date,
-            "time": r.time,
-            "guests": r.guests,
-            "table_type": r.table_type,
-            "status": r.status,
-            "special_requests": r.special_requests,
-        } for r in reservations
-    ]}
+    return {
+        "success": True,
+        "count": len(reservations),
+        "reservations": [
+            {
+                "reference_code": r.reference_code,
+                "date": r.date,
+                "time": r.time,
+                "guests": r.guests,
+                "table_type": r.table_type,
+                "status": r.status,
+                "special_requests": r.special_requests,
+            }
+            for r in reservations
+        ],
+    }
 
 
 @router.get("/admin/all")
@@ -114,15 +165,18 @@ def get_reservation(
     if not res or (res.user_id != current_user.id and current_user.role != "ADMIN"):
         raise HTTPException(status_code=404, detail="Reservation not found")
 
-    return {"success": True, "reservation": {
-        "reference_code": res.reference_code,
-        "full_name": res.full_name,
-        "email": res.email,
-        "phone": res.phone,
-        "date": res.date,
-        "time": res.time,
-        "guests": res.guests,
-        "table_type": res.table_type,
-        "status": res.status,
-        "special_requests": res.special_requests,
-    }}
+    return {
+        "success": True,
+        "reservation": {
+            "reference_code": res.reference_code,
+            "full_name": res.full_name,
+            "email": res.email,
+            "phone": res.phone,
+            "date": res.date,
+            "time": res.time,
+            "guests": res.guests,
+            "table_type": res.table_type,
+            "status": res.status,
+            "special_requests": res.special_requests,
+        },
+    }

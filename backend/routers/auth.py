@@ -213,6 +213,19 @@ def delete_my_account(
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie("access_token", path="/", samesite="strict", secure=True, httponly=True)
-    response.delete_cookie("refresh_token", path="/", samesite="strict", secure=True, httponly=True)
+    """Securely purge session cookies with strict defense-in-depth flags."""
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        samesite="strict",
+        secure=True,
+        httponly=True,
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/",
+        samesite="strict",
+        secure=True,
+        httponly=True,
+    )
     return {"message": "Logged out successfully"}
